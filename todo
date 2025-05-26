@@ -10,23 +10,35 @@ In order of priority...
 ✅ Keep README changes and code changes in separate commits
 ✅ Use `git squash` to keep beautiful git history
 
-Add testing via pytest
-
-Add a CI/CD pipeline to include pytest, mypy|pytype|pyright|pylance|pyre
-    https://www.infoworld.com/article/2260170/4-python-type-checkers-to-keep-your-code-clean.html
-
-Add a test coverage badge for the README
-
 Render tbody data in a hard-coded fashion, where the CSV file specifies headers the data is attached to,
 and the row-spanning headers already exist within the template.
     CSV will clarify what the data the record holds via named columns.
 
     When all is complete, make it work with any number of [optionally row-spanning] headers.
     Achieve row-spanning parent headers via a CSV file w/ optional header name/rowspan/colspan columns.
+    
+    This dynamic capability is better suited for SQL Queries given the need to dynamically
+    specify row/colspans given the number of records associated with a parent header/subheader
+    
+    Implement a CHECK() constraint that denies negative values for:
+        mass
+        diameter
+        density
+        day_length
+        moon_count
+        dist_from_sun
 
 Refactor settings to a settings.py file
 Refactor Template to a /core/ package
 Implement HTML minification
+
+
+Add testing via pytest
+
+Add a CI/CD pipeline to include pytest, mypy|pytype|pyright|pylance|pyre
+    https://www.infoworld.com/article/2260170/4-python-type-checkers-to-keep-your-code-clean.html
+
+Add a test coverage badge for the README
 
 Fix XSS (Escape any non-comment data. For comments, we can use a parser to check for anything that isn't a <p> or an <a>.)
 
