@@ -1,4 +1,4 @@
-"Name", "Type", "Subtype", "Mass", "Diameter", "Density", "Gravity", "Day Length", "Distance from Sun", "Average Temperature", "Moon Count", "Notes" 
+"name", "type", "subtype", "mass", "diameter", "density", "gravity", "day_length", "dist_from_sun", "avg_temp", "moon_count", "notes"
 Mercury, "Terrestrial", "", 0.330, 4879, 5427, 3.7, 4222.6, 57.9, 167, 0, "Closest to the Sun"
 "Venus", "Terrestrial", "", 4.87, 12104, 5243, 8.9, 2802.0, 108.2, 464, 0,
 "Earth", "Terrestrial", "", 5.97, 12756, 5514, 9.8, 24.0, 149.6, 15, 1, "Our world"
