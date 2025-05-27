@@ -24,13 +24,17 @@ with open(CSV_FILEPATH, 'r') as file_object:
         planet_type = row_dict["Type"]
         planet_subtype = row_dict.get("Subtype")
         
+        data = { **row_dict }
+        del data["Type"]
+        del data["Subtype"]
+        
         if ENABLE_SQL:
-            planet_id = cur.execute("""
-                SELECT seq + 1
-                FROM sqlite_sequence
-                WHERE name = 'planet';
-            """)
-            
+            planet_seq_current = cur.execute("""
+                SELECT "seq"
+                FROM "sqlite_sequence"
+                WHERE "name" = 'planet';
+            """).fetchone()[0]
+
             # Choose the subheader if available, otherwise the header.
             # why are these variables not hoisted outside of the if statement?
             # my old django code had some hoisting if I recall.. look into it
@@ -39,20 +43,21 @@ with open(CSV_FILEPATH, 'r') as file_object:
                 SELECT header_id
                 FROM main.header
                 WHERE name = ?;
-            """, (planet_final_type,))
+            """, (planet_final_type,)).fetchone()[0]
             
-            data = { **row_dict }
-            data.update(planet_id=planet_id.fetchone()[0])
-            data.update(header_id=planet_header_id.fetchone()[0])
-    
+            data["planet_id"] = planet_seq_current
+            data["header_id"] = planet_header_id
+        
         if ENABLE_SQL:
-            # error here lolz
+            print(data)
+            # binding 1 has no name error
             cur.execute("""
                 INSERT INTO planet
                 VALUES
-                    (?, ?, ?, ?, ?, ? ,  ?, ?, ?, ?,  ?, ?, ?, ?);
+                    (?, ?, ?, ?, ?, ? ,  ?, ?, ?, ?,  ?, ?);
             """, data)
             con.commit()
+            print("Success")
         
 if ENABLE_SQL:   
     con.close()
