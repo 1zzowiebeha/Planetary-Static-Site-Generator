@@ -21,19 +21,28 @@ with open(CSV_FILEPATH, 'r') as file_object:
     csv_reader = csv.DictReader(file_object, skipinitialspace=True)
     
     for row_dict in csv_reader:
-        planet_type = row_dict["Type"]
-        planet_subtype = row_dict.get("Subtype")
+        planet_type = row_dict["type"]
+        planet_subtype = row_dict.get("subtype")
         
         data = { **row_dict }
-        del data["Type"]
-        del data["Subtype"]
+        del data["type"]
+        del data["subtype"]
+        
+        data.setdefault("notes", data.get("notes", None))
         
         if ENABLE_SQL:
             planet_seq_current = cur.execute("""
-                SELECT "seq"
+                SELECT "seq" + 1
                 FROM "sqlite_sequence"
                 WHERE "name" = 'planet';
             """).fetchone()[0]
+            
+            cur.execute("""
+                UPDATE "sqlite_sequence"
+                SET "seq" = "seq" + 1
+                WHERE "sqlite_sequence"."name" = 'planet';
+            """)
+            con.commit()
 
             # Choose the subheader if available, otherwise the header.
             # why are these variables not hoisted outside of the if statement?
@@ -49,15 +58,17 @@ with open(CSV_FILEPATH, 'r') as file_object:
             data["header_id"] = planet_header_id
         
         if ENABLE_SQL:
-            print(data)
-            # binding 1 has no name error
+            print(f"inserted id#{planet_seq_current} into planet")
             cur.execute("""
                 INSERT INTO planet
                 VALUES
-                    (?, ?, ?, ?, ?, ? ,  ?, ?, ?, ?,  ?, ?);
+                    (:planet_id,:name,:mass,:diameter,:density,
+                     :gravity,:day_length,:dist_from_sun,:avg_temp,
+                     :moon_count,:header_id,:notes);
             """, data)
             con.commit()
-            print("Success")
         
 if ENABLE_SQL:   
     con.close()
+    
+print("\nSuccess")
