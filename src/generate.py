@@ -1,29 +1,33 @@
 import os
 import warnings
-from typing import Self
+import csv
+import sqlite3
+from operator import itemgetter
+from typing import Self, Any
 
 ############
 # Settings #
 ############
 
-# A single "\" at the end of a docstring line
-# ... will ignore its implicit newline.
+DEBUG = False
+
+INPUT_DB_FILENAME = "planet_data.db"
+OUTPUT_DIR = "public"
+
+# It's best not to touch these #
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+INPUT_DB_PATH = os.path.join(BASE_DIR, INPUT_DB_FILENAME)
+
+ROOT_DIR = os.path.join(BASE_DIR, "..")
+OUTPUT_PATH = os.path.join(ROOT_DIR, OUTPUT_DIR)
 
 WELCOME_MESSAGE = """
 #################################
     Planetary HTML Table Generator
 #################################
 """
-
-INPUT_DATA_FILENAME = "data.txt"
-OUTPUT_DIR = "public"
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-INPUT_DATA_PATH = os.path.join(BASE_DIR, INPUT_DATA_FILENAME)
-
-ROOT_DIR = os.path.join(BASE_DIR, "..")
-OUTPUT_PATH = os.path.join(ROOT_DIR, OUTPUT_DIR)
 
 ############
 
@@ -76,40 +80,145 @@ def minify(html_contents: str) -> str:
     return html_contents
 
 
-def generateTableBody(data_filepath: str) -> str:
-    """Produce a string of <th> and <td> tags from the passed data file.
+def format_document(html_contents: str) -> str:
+    """Format an HTML document via Prettier."""
+    warnings.warn("Formatting is yet to be implemented.")
+    
+    return html_contents
+
+
+def generateTableBodyFromDB(db_filepath: str) -> str:
+    """Produce a string of <th> and <td> tags from the DB file.
     
         Expects the data input file to positionally contain:
-            1 header string, 8 floats, and an optional string of space-separated words.
+            string, 8 floats, optional string
         
         Data Input:
-            header 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 [optional: Space-separated words]
+            Mercury 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 [optional: Space-separated words]
         Data Output:
-            <th>header</th><td>0.0</td> ... <td>A string of words</td>
+            <th>Mercury</th><td>0.0</td> ... <td>A string of words</td>
     """
-    
     tbody_contents: str = ""
-
-    with open(data_filepath, 'r') as file_object:
-        for line in file_object.readlines():
-            data_values: list[str] = line.split(" ")
+    
+    with sqlite3.connect(db_filepath) as connection:
+        tr_headers_created = {}
+        
+        for planet_record in connection.execute("SELECT * FROM planet;"):
+            planet_name = planet_record[1]
+            planet_data_floats = planet_record[2:-2]
+            planet_submost_header = planet_record[-2]
+            planet_notes = planet_record[-1]
             
-            header: str = data_values[0]             # Grab table header
-            floats: list[str] = data_values[1:9]     # Grab the 8 data floats
-            end_string: list[str] = data_values[9:]  # Grab end string words (notes field)
+            # subheaders too
+            # retrieve the number of rows that share this record's header.
+            # the header will always be the lowest in the subheader hierarchy.
+            # if a parent_id exists, walk up the chain and assign to variables
+            # such that it allows reconstruction in the HTML.
+            
+            rows_of_same_submost_header: list[Any] = connection.execute(
+                "SELECT COUNT(*) FROM planet GROUP BY header_id"
+            ).fetchall()
+            
+            
+            super_headers_to_create = [
+                # (0, "Parent"), (1, "Child"), (2, "Child'sChild")
+            ]
+            
+            next_super_header: str
+            
+            # Why is it None?
+            next_super_header = connection.execute("""
+                SELECT "super_header"."header_id"
+                FROM "header" as "super_header"
+
+                INNER JOIN "header" as "sub_header"
+                ON "super_header"."header_id" = "sub_header"."parent_id"
+
+                WHERE "sub_header"."header_id" = 2;
+            """).fetchone()
+            
+            super_headers_to_create.append(next_super_header)
+            
+            # Better suited as a DB query
+            # rows_of_type = 
+            # ... logic to calculate rowspan and colspans ...
             
             # Write to HTML partial buffer
             tbody_contents += ("<tr>\n")
-            tbody_contents += f"\t<th>{header}</th>\n"
-            for datum in floats:
-                # .rstrip() removes the implicit newline
-                tbody_contents += f"\t<td>{datum.rstrip()}</td>\n"
             
-            # If there are words within the notes field list:
-            if len(end_string) != 0:
-                # Join word list with space deliminator.
-                joined_str = ' '.join(end_string).rstrip()
-                tbody_contents += f"\t<td>{joined_str}</td>\n"
+            # huh.....
+            if planet_submost_header not in tr_headers_created:
+                # Topmost super header reached. Write the row:
+                if not next_super_header:
+                    tbody_contents += f"<th rowspan=\"{len(tr_headers_created)}\">{planet_submost_header}</th>\n"
+            
+            tbody_contents += f"<th>{planet_name}</th>\n"
+            for datum in planet_data_floats:
+                tbody_contents += f"<td>{datum}</td>\n"
+            
+            if planet_notes != '':
+                tbody_contents += f"<td>{planet_notes}</td>\n"
+                
+            tbody_contents += "</tr>\n"
+    
+    if not tbody_contents:
+        raise Exception("No data present in file supplied.")
+    
+    return tbody_contents
+
+
+
+
+def generateTableBody(csv_filepath: str) -> str:
+    """Produce a string of <th> and <td> tags from the passed csv file.
+    
+        Expects the data input file to positionally contain:
+            string, 8 floats, optional string
+        
+        Data Input:
+            Mercury 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 [optional: Space-separated words]
+        Data Output:
+            <th>Mercury</th><td>0.0</td> ... <td>A string of words</td>
+    """
+    tbody_contents: str = ""
+    
+    with open(csv_filepath, 'r') as file_object:
+        # Strip trailing spaces after deliminators (trailing spaces are used for visual appeal):
+        # Permit commas with trailing spaces within quoted cells:
+        # https://stackoverflow.com/questions/8311900/read-csv-file-with-comma-within-fields-in-python
+        # If we need to perform numeric calculation, quoting=csv.QUOTE_NONNUMERIC will come in handy.
+        csv_reader = csv.DictReader(file_object, skipinitialspace=True)
+        
+        # make it super dynamic
+        # count # of types/subtypes
+        # create rowspans and colspans based on row count and subtype count of parent
+        # yuhhh
+        # getting griddy here
+        
+        for row_dict in csv_reader:
+            planet_name = row_dict["Name"]
+            planet_type = row_dict["Type"]
+            planet_subtype = row_dict.get("Subtype")
+            floats = itemgetter(
+                "Mass", "Diameter", "Density", "Gravity",
+                "Day Length", "Distance from Sun",
+                "Average Temperature", "Moon Count"
+            )(row_dict)
+            comment = row_dict.get("Notes")
+            
+            # Better suited as a DB query
+            # rows_of_type = 
+            
+            # Write to HTML partial buffer
+            tbody_contents += ("<tr>\n")
+            
+            tbody_contents += f"<th>{planet_name}</th>\n"
+            for datum in floats:
+                tbody_contents += f"<td>{datum}</td>\n"
+            
+            if comment:
+                tbody_contents += f"<td>{comment}</td>\n"
+                
             tbody_contents += "</tr>\n"
     
     if not tbody_contents:
@@ -122,19 +231,26 @@ def publish_tabular_data() -> None:
     """Generate, render, and write planetary data
     to an HTML file under /public/."""
     
-    table_body: str = generateTableBody(INPUT_DATA_PATH)
-    
+    table_body: str = generateTableBodyFromDB(INPUT_DB_PATH)
+
+    return 
+
     context = {
         "table_body": table_body
     }
     
     template: Template = Template.get_template("data_visualized")
     rendered_html: str = template.render(context)
-    minified_html: str = minify(rendered_html)
+    
+    if DEBUG:
+        # Apply pretty formatting
+        rendered_html = format_document(rendered_html)
+    else:
+        rendered_html = minify(rendered_html)
     
     output_filepath: str = os.path.join(OUTPUT_PATH, template.fullname)
     with open(output_filepath, "w") as file_object:
-        file_object.write(minified_html)
+        file_object.write(rendered_html)
         
 
 if __name__ == "__main__":
