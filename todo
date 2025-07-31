@@ -20,6 +20,8 @@ and the row-spanning headers already exist within the template.
     This dynamic capability is better suited for SQL Queries given the need to dynamically
     specify row/colspans given the number of records associated with a parent header/subheader
     
+    data integrity:
+    
     Implement a CHECK() constraint that denies negative values for:
         mass
         diameter
@@ -27,6 +29,9 @@ and the row-spanning headers already exist within the template.
         day_length
         moon_count
         dist_from_sun
+        
+    Constraint: Check if there exists a subheader for a superheader.
+                If so, prevent any foreign key reference from a planet.
 
 Refactor settings to a settings.py file
 Refactor Template to a /core/ package

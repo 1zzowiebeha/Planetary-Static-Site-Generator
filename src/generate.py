@@ -106,39 +106,131 @@ def generateTableBodyFromDB(db_filepath: str) -> str:
         for planet_record in connection.execute("SELECT * FROM planet;"):
             planet_name = planet_record[1]
             planet_data_floats = planet_record[2:-2]
-            planet_submost_header = planet_record[-2]
+            planet_submost_header_id = planet_record[-2]
             planet_notes = planet_record[-1]
             
-            # subheaders too
+            # we'll create our ordering for the list above starting at 0
+            # for the subchild, then counting up to the parent (it's easier)
+            
+            # once i git gud at sql, I could implement the reverse order which makes
+            # more sense. I'd need to count the number of headers in the chain from
+            # any point in the chain to be able to correctly add an order index
+            # to the subchildren, since I'll be starting from the subchild.
+            
+            # also to learn:
+            # pro git!! sql joins, anti-joins, create my own db business kingdom,
+            # sql selection, ddl, all the d*ls, nelson's course, pgwiki,
+            # HTML, CSS, JS, lots of sql practice, linux bash scripts via fcc
+            # sql book. just lots of hard consistent work.
+            
             # retrieve the number of rows that share this record's header.
             # the header will always be the lowest in the subheader hierarchy.
             # if a parent_id exists, walk up the chain and assign to variables
             # such that it allows reconstruction in the HTML.
             
-            rows_of_same_submost_header: list[Any] = connection.execute(
-                "SELECT COUNT(*) FROM planet GROUP BY header_id"
-            ).fetchall()
-            
-            
-            super_headers_to_create = [
-                # (0, "Parent"), (1, "Child"), (2, "Child'sChild")
+            headers_to_create: list[dict] = [
+                # (0, "Child'sChild2", 1),
+                # (1, "Child'sChild", 1),
+                # (2, "Child'sChild", 1),
+                # (3, "Child", 3),
+                # (4, "Parent", 3), ???????????/ how to get rowspan 3.... hmmm...
+                # algorithm to add up subchildren? sql query to calculate it for us?......
             ]
             
-            next_super_header: str
+            # general tree traversal
+            # How do we write the correct row headers & rowspans
+            # for the HTML table?
+            # How do we write these headers first, once?
+                # flags - headers_to_create
+                # write once, write any submost rows, remove subheader, write next subheader
+                
+                # select rows of this subheader
+                # write them
+                # do the next subheader
             
-            # Why is it None?
-            next_super_header = connection.execute("""
-                SELECT "super_header"."header_id"
-                FROM "header" as "super_header"
+            # Possible limitations that require: #
+            #   CTEs, Subqueries, Recursive Queries, Unions,
+            #   Functions, Triggers
+            
+            # All planets in the DB refer only to submost headers. #
+            
+            planet_submost_header_name = connection.execute("""
+                SELECT "header"."name"
+                FROM "header"
+                WHERE "sub_header"."header_id" = ?;
+            """, (planet_submost_header_id,)).fetchone()
+            
+            rows_of_same_submost_header: list[Any] = connection.execute(
+                "SELECT COUNT(*) FROM planet GROUP BY header_id HAVING header_id = ?",
+                (planet_submost_header_id,)
+            ).fetchone()
+            
+            headers_to_create.append(
+                {
+                    "creation_reverse_index": 0,
+                    "header_name": planet_submost_header_name[0],
+                    "planets_pointing_to_header": rows_of_same_super_header[0],
+                    "headers_pointing_to_header": 0,
+                }
+            )
+            
+            # index, header name, rowspan
+            # index: order the submost header (index of 0) in the parent-child hierarchy
+            #        ... to the topmost parent header (largest index value)
+            # rowspan: number of rows that the header spans. used to
+            #        ... reconstruct the heading into HTML table row headings
+            next_super_header: tuple[int, str]
+    
+            # Continue to iterate until no more headers exist
+            # .. in the chain.
+            while next_super_header:
+                # grab next super header id & name
+                next_super_header = connection.execute("""
+                    SELECT "super_header"."header_id", "super_header"."name"
+                    FROM "header" as "super_header"
 
-                INNER JOIN "header" as "sub_header"
-                ON "super_header"."header_id" = "sub_header"."parent_id"
+                    INNER JOIN "header" as "sub_header"
+                    ON "super_header"."header_id" = "sub_header"."parent_id"
 
-                WHERE "sub_header"."header_id" = 2;
-            """).fetchone()
-            
-            super_headers_to_create.append(next_super_header)
-            
+                    WHERE "sub_header"."header_id" = ?;
+                """, (next_super_header[0] or planet_submost_header_id,)).fetchone()
+                
+                # If a parent header exists for the current subheader...
+                if next_super_header:
+                    rows_of_same_super_header: list[Any] = connection.execute(
+                        "SELECT COUNT(*) FROM planet GROUP BY header_id HAVING header_id = ?",
+                        (next_super_header[0],)
+                    ).fetchone()
+                    
+                    # sql navigate to the root of a tree from any point
+                    # sql find how many leafs exist from the top of a tree
+                    
+                    # SELECT COUNT(*) FROM header WHERE header_id NOT EXISTS IN (SELECT)
+                    leafs_of_root = connection.execute("" \
+                    "" \
+                    "")
+                    
+                    # traverse downwards to find all headers that point to this one...
+                    rows_of_same_super_header: list[Any] = connection.execute("""
+                        SELECT COUNT(*)
+                        FROM header
+INNER JOIN "headers" 
+
+
+                    """, (next_super_header[0],)
+                    ).fetchone()
+                    
+                    headers_to_create.append(
+                        {
+                            "creation_reverse_index": len(headers_to_create),
+                            "header_name": next_super_header[1],
+                            "planets_pointing_to_header": rows_of_same_super_header[0],
+                            "headers_pointing_to_header": 0,
+                        }
+                    )
+                else:
+                    
+                    
             # Better suited as a DB query
             # rows_of_type = 
             # ... logic to calculate rowspan and colspans ...
@@ -151,6 +243,7 @@ def generateTableBodyFromDB(db_filepath: str) -> str:
                 # Topmost super header reached. Write the row:
                 if not next_super_header:
                     tbody_contents += f"<th rowspan=\"{len(tr_headers_created)}\">{planet_submost_header}</th>\n"
+            #############
             
             tbody_contents += f"<th>{planet_name}</th>\n"
             for datum in planet_data_floats:
